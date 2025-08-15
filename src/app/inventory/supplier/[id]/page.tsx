@@ -2,84 +2,78 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Search, ChevronDown } from 'lucide-react';
 import axios from 'axios';
-import { useAuth } from '@/context/AuthContext'; // Adjust the path based on your project structure
+import { useAuth } from '@/context/AuthContext';
+import { useParams, useRouter } from 'next/navigation';
 
 const SupplierProductPage = () => {
   const { user } = useAuth();
+  const params = useParams();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [supplierInventory, setSupplierInventory] = useState(null);
-  const [products, setProducts] = useState([]);
+  const [error, setError] = useState<string | null>(null);
+  const [supplierInventory, setSupplierInventory] = useState<any>(null);
+  const [products, setProducts] = useState<any[]>([]);
 
-  // Hardcoded ID for now - in production you'd get this from URL params
-  const supplierId = "682988f6ab54eabc3f322767";
+  // Get supplier ID from URL params
+  const supplierId = params.id as string;
 
   useEffect(() => {
     const fetchSupplierInventory = async () => {
+      if (!user?.token) {
+        setError('Authentication required');
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
+        setError(null);
         
+        // Fetch supplier inventory with products
         const config = {
           method: 'get',
-          url: `${process.env.NEXT_PUBLIC_SERVER_HOSTNAME || 'http://localhost:3000'}/api/supplier-inventory/${supplierId}`,
+          maxBodyLength: Infinity,
+          url: `http://localhost:3000/api/supplier-inventory?includeProducts=true&supplierId=${supplierId}`,
           headers: { 
-            'Authorization': `Bearer ${user?.token || localStorage.getItem('authToken')}`
+            'Authorization': `Bearer ${user.token}`
           }
         };
         
         const response = await axios.request(config);
-        setSupplierInventory(response.data);
+        console.log('Supplier inventory response:', response.data);
         
-        // Also fetch products associated with this supplier
-        const productsResponse = await axios({
-          method: 'get',
-          url: `${process.env.NEXT_PUBLIC_SERVER_HOSTNAME || 'http://localhost:3000'}/api/supplier-inventory/${supplierId}/products`,
-          headers: { 
-            'Authorization': `Bearer ${user?.token || localStorage.getItem('authToken')}`
+        if (response.data && Array.isArray(response.data)) {
+          const supplierData = response.data.find((item: any) => item._id === supplierId);
+          if (supplierData) {
+            setSupplierInventory(supplierData);
+            if (supplierData.products && Array.isArray(supplierData.products)) {
+              setProducts(supplierData.products);
+            } else {
+              setProducts([]);
+            }
+          } else {
+            setError('Supplier not found');
+            setProducts([]);
           }
-        });
-        
-        // If product data exists, set it
-        if (productsResponse.data && Array.isArray(productsResponse.data)) {
-          setProducts(productsResponse.data);
         } else {
-          // Fallback to mock data if API doesn't return products
-          setProducts(generateMockProducts());
+          setError('Invalid response format');
+          setProducts([]);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching supplier inventory:', err);
-        setError(err.message || 'Failed to fetch data');
-        // Fallback to mock data on error
-        setProducts(generateMockProducts());
+        setError(err.response?.data?.message || err.message || 'Failed to fetch data');
+        setProducts([]);
       } finally {
         setLoading(false);
       }
     };
 
-    if (user?.token || localStorage.getItem('authToken')) {
+    if (supplierId && user?.token) {
       fetchSupplierInventory();
     }
   }, [user, supplierId]);
 
-  // Generate mock products for fallback
-  const generateMockProducts = () => {
-    return Array(9).fill(null).map((_, index) => ({
-      id: index + 1,
-      itemDetails: "A&F AUTHENTIC NIGHT M TESTER 100ML",
-      itemCode: "#u76855",
-      quantity: index % 2 === 0 ? 2500 : 10000,
-      price: 100.00,
-      freight: 100.00,
-      duty: 100.00,
-      landed: 100.00,
-      a: 100.00,
-      b: 100.00,
-      c: 100.00,
-      d: 100.00,
-      totalStockValue: 4000.00,
-      uploadDate: index === 0 ? "9 Jan 2025" : index === 1 ? "5 Feb 2025" : "4 Jan 2025"
-    }));
-  };
+
 
   // Handle loading and error states
   if (loading) {
@@ -121,7 +115,10 @@ const SupplierProductPage = () => {
     <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Header with back button */}
       <div className="bg-white p-4 shadow">
-        <button className="flex items-center text-gray-600 hover:text-gray-800">
+        <button 
+          onClick={() => router.push('/inventory/supplier')}
+          className="flex items-center text-gray-600 hover:text-gray-800"
+        >
           <ArrowLeft className="w-5 h-5 mr-2" />
           <span>Back To Supply Lists</span>
         </button>

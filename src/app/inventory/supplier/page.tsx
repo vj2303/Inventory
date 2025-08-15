@@ -6,6 +6,7 @@ import UploadModal from './UploadModal';
 import { Search } from 'lucide-react';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 
 
@@ -70,6 +71,7 @@ type SortOrder = 'asc' | 'desc';
 const Page = () => {
   const auth = useAuth() as { user: any } | null;
   const user = auth?.user;
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
   const [selectedCountry, setSelectedCountry] = useState<string>('');
@@ -82,6 +84,8 @@ const Page = () => {
   const [supplierInventoryList, setSupplierInventoryList] = useState<any[]>([]);
   const [supplierInventoryLoading, setSupplierInventoryLoading] = useState<boolean>(true);
   const [supplierInventoryError, setSupplierInventoryError] = useState<string | null>(null);
+  
+
 
   // Fetch products from API
   const fetchProducts = async (searchTerm: string = '', sort: SortOrder = 'desc'): Promise<void> => {
@@ -117,27 +121,39 @@ const Page = () => {
   // Fetch supplier inventory list (new API)
   useEffect(() => {
     const fetchSupplierInventory = async () => {
+      if (!user?.token) {
+        setSupplierInventoryError('Authentication required');
+        setSupplierInventoryLoading(false);
+        return;
+      }
+      
       setSupplierInventoryLoading(true);
       setSupplierInventoryError(null);
       try {
         const config = {
           method: 'get',
           maxBodyLength: Infinity,
-          url: 'http://localhost:3000/api/supplier-inventory',
+          url: 'http://localhost:3000/api/supplier-inventory?includeProducts=false',
           headers: {
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ODY0MjI3NTZiMzNlZTUxMThmNGYyNzUiLCJyb2xlIjoiVVNFUiIsImFjY2VzcyI6WyJHRU5FUkFMX1VTRVIiXSwiaWF0IjoxNzUzODY1MzgzLCJleHAiOjE3NTM5NTE3ODN9.TVAN-flzpDr7ACVK8UroTm_0csTyF9e-iRQRvwlBOmQ'
+            'Authorization': `Bearer ${user.token}`
           }
         };
         const response = await axios.request(config);
         setSupplierInventoryList(response.data);
       } catch (error) {
+        console.error('Error fetching supplier inventory:', error);
         setSupplierInventoryError('Failed to load supplier inventory.');
       } finally {
         setSupplierInventoryLoading(false);
       }
     };
     fetchSupplierInventory();
-  }, []);
+  }, [user]);
+
+  // Handle supplier click
+  const handleSupplierClick = (supplierId: string) => {
+    router.push(`/inventory/supplier/${supplierId}`);
+  };
 
   // Initial data fetch
   useEffect(() => {
@@ -247,21 +263,12 @@ const Page = () => {
         </div>
       </div>
 
-      {loading ? (
-        <div className="text-center py-10">
-          <p>Loading products...</p>
-        </div>
-      ) : error ? (
-        <div className="text-center py-10 text-red-500">
-          <p>{error}</p>
-        </div>
-      ) : (
-        <SupplierTable data={formattedProductsData} />
-      )}
+    
 
       {/* New Supplier Inventory Table */}
       <div className="mt-12">
         <h2 className="text-xl font-semibold mb-4">Supplier Inventory List</h2>
+        <p className="text-gray-600 mb-4">Click on any supplier row to view their products in a new page</p>
         {supplierInventoryLoading ? (
           <div className="text-center py-6">Loading supplier inventory...</div>
         ) : supplierInventoryError ? (
@@ -285,8 +292,12 @@ const Page = () => {
               </thead>
               <tbody>
                 {supplierInventoryList.map((item) => (
-                  <tr key={item._id} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4">{item.supplier?.name}</td>
+                  <tr 
+                    key={item._id} 
+                    className="border-b hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleSupplierClick(item._id)}
+                  >
+                    <td className="py-3 px-4 font-medium">{item.supplier?.name}</td>
                     <td className="py-3 px-4">{item.supplier?.country}</td>
                     <td className="py-3 px-4">{item.supplier?.city}</td>
                     <td className="py-3 px-4">{item.freightCost}</td>
@@ -303,6 +314,8 @@ const Page = () => {
           </div>
         )}
       </div>
+
+
 
       {/* Upload Modal */}
       <UploadModal 

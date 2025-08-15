@@ -1,7 +1,7 @@
 // utils/api.ts
 
 const API_BASE_URL = 'http://localhost:3000/api';
-const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2N2Y2YTJiOWU4NmEwNGE2N2YwY2MwOTQiLCJyb2xlIjoiTUFOQUdFUiIsImlhdCI6MTc0NDgxNzU3NSwiZXhwIjoxNzQ0OTAzOTc1fQ.f1mYCTTJWczEE8ACXvYubvDa_q518_bBo01J5H653AE';
+const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ODhhNjBkNmJiNmI3MzEwOThmNzA3MzAiLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJhY2Nlc3MiOlsiR0VORVJBTF9VU0VSIl0sImlhdCI6MTc1NDk0MTExNywiZXhwIjoxNzU1MDI3NTE3fQ.u2pgm76uMgT3XhZ0SBOmMxrghKVwhEMLOCeaUsxbS68';
 
 export interface Address {
   _id?: string;
@@ -24,11 +24,47 @@ export interface Customer {
   __v: number;
 }
 
+export interface Permission {
+  resource: string;
+  actions: string[];
+}
+
+export interface CreateUserData {
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+  access: string;
+  currency: string;
+  country: string;
+  permissions: Permission[];
+}
+
 export const getAuthHeaders = () => {
   return {
     'Content-Type': 'application/json',
-    'Authorization': AUTH_TOKEN
+    'Authorization': `Bearer ${AUTH_TOKEN}`
   };
+};
+
+export const createUser = async (userData: CreateUserData) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user-permissions`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(userData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `API Error: ${response.status} ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error creating user:', error);
+    throw error;
+  }
 };
 
 export const fetchCustomers = async (): Promise<Customer[]> => {

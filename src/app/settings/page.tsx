@@ -24,7 +24,7 @@ const Page: React.FC = () => {
         title="User Management"
         description="Set users access to the screens"
         icon={<ToggleLeft className="w-8 h-8" />}
-        href="/user-management"
+        href="/settings/user-management"
       />
       <Card
         title="Warehouse Management"

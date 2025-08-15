@@ -8,13 +8,23 @@ import { useAuth } from '@/context/AuthContext';
 
 // Define the MaterialCenter interface
 interface MaterialCenter {
-  _id: string;
+  _id?: string;
+  id: string;
   city: string;
   country: string;
   address: string;
   warehouseSize: string;
   currency: string;
   isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  _count?: {
+    products: number;
+    sales: number;
+    purchaseOrders: number;
+    sourceTransfers: number;
+    destinationTransfers: number;
+  };
 }
 
 export default function MaterialCenterTable() {
@@ -48,10 +58,10 @@ export default function MaterialCenterTable() {
       };
       
       const response = await axios.request(config);
-      setMaterialCenters(response.data);
+      setMaterialCenters(response.data.materialCenters || []);
       
       // Calculate unique countries
-      const countries = new Set(response.data.map(center => center.country));
+      const countries = new Set((response.data.materialCenters || []).map(center => center.country));
       setUniqueCountries(countries.size);
       
       setLoading(false);
@@ -100,7 +110,7 @@ export default function MaterialCenterTable() {
       // Update the specific material center in the list (server response already contains all required fields)
       setMaterialCenters(prevCenters => 
         prevCenters.map(center => 
-          center._id === updatedCenter._id ? updatedCenter : center
+          center.id === updatedCenter.id ? updatedCenter : center
         )
       );
       
@@ -132,7 +142,7 @@ export default function MaterialCenterTable() {
       
       // Update state directly without refetching
       setMaterialCenters(prevCenters => {
-        const updatedCenters = prevCenters.filter(center => center._id !== centerId);
+        const updatedCenters = prevCenters.filter(center => center.id !== centerId);
         
         // Update unique countries count
         const countries = new Set(updatedCenters.map(center => center.country));
@@ -188,7 +198,7 @@ export default function MaterialCenterTable() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {materialCenters.map((center) => (
-                <tr key={center._id} className="hover:bg-gray-50">
+                <tr key={center.id} className="hover:bg-gray-50">
                   <td className="py-3 px-4">{center.address}</td>
                   <td className="py-3 px-4">{center.city}</td>
                   <td className="py-3 px-4">{center.country}</td>
@@ -205,7 +215,7 @@ export default function MaterialCenterTable() {
                         <Edit className="w-5 h-5" />
                       </button>
                       <button 
-                        onClick={() => handleDeleteMaterialCenter(center._id)}
+                        onClick={() => handleDeleteMaterialCenter(center.id)}
                         className="text-red-600 hover:text-red-800"
                       >
                         <Trash className="w-5 h-5" />

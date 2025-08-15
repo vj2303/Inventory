@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronDown, Upload, AlignLeft, X } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
@@ -127,13 +127,67 @@ const OfferListItem = ({ item, onRemove }: { item: OfferListItem; onRemove: (id:
 };
 
 // Dropdown Component
-const Dropdown = ({ label, className = "" }: { label: string; className?: string }) => {
+const Dropdown = ({ 
+  label, 
+  className = "", 
+  options = [], 
+  value = "", 
+  onChange = () => {},
+  disabled = false 
+}: { 
+  label: string; 
+  className?: string;
+  options?: { value: string; label: string }[];
+  value?: string;
+  onChange?: (value: string) => void;
+  disabled?: boolean;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   return (
-    <div className={`relative ${className}`}>
-      <button className="w-full flex items-center justify-between border border-gray-300 rounded p-2 bg-white">
-        <span className="text-gray-700">{label}</span>
-        <ChevronDown className="w-4 h-4" />
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      <button 
+        className={`w-full flex items-center justify-between border border-gray-300 rounded p-2 bg-white ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-gray-400'}`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+      >
+        <span className="text-gray-700">
+          {value ? options.find(opt => opt.value === value)?.label || value : label}
+        </span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
+      
+      {isOpen && options.length > 0 && (
+        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-60 overflow-y-auto">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              className="w-full text-left px-3 py-2 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -182,10 +236,271 @@ export default function CreateOfferListPage() {
   const [supplierInventory, setSupplierInventory] = useState<InventoryItem[]>([]);
   const [companyInventory, setCompanyInventory] = useState<InventoryItem[]>([]);
   
+  // States for country and city selection
+  const [selectedCountry, setSelectedCountry] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [countries, setCountries] = useState<{ value: string; label: string }[]>([]);
+  const [cities, setCities] = useState<{ value: string; label: string }[]>([]);
+  const [loadingCities, setLoadingCities] = useState(false);
+  
+  // States for other dropdowns
+  const [selectedCurrency, setSelectedCurrency] = useState('');
+  const [selectedSupplier, setSelectedSupplier] = useState('');
+  const [selectedMaterialCenter, setSelectedMaterialCenter] = useState('');
+  const [selectedPrice, setSelectedPrice] = useState('');
+  const [selectedIncoTerms, setSelectedIncoTerms] = useState('');
+  
+  // States for supplier data
+  const [suppliers, setSuppliers] = useState<{ value: string; label: string }[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+  const [supplierError, setSupplierError] = useState<string | null>(null);
+  
+  // States for material center data
+  const [materialCenters, setMaterialCenters] = useState<{ value: string; label: string; country: string; city: string; address: string; warehouseSize: string }[]>([]);
+  const [loadingMaterialCenters, setLoadingMaterialCenters] = useState(false);
+  const [materialCenterError, setMaterialCenterError] = useState<string | null>(null);
+  
+  // Options for dropdowns
+  const currencyOptions = [
+    { value: 'USD', label: 'USD - US Dollar' },
+    { value: 'EUR', label: 'EUR - Euro' },
+    { value: 'INR', label: 'INR - Indian Rupee' },
+    { value: 'GBP', label: 'GBP - British Pound' },
+    { value: 'JPY', label: 'JPY - Japanese Yen' }
+  ];
+  
+  const priceOptions = [
+    { value: 'priceA', label: 'Price A' },
+    { value: 'priceB', label: 'Price B' },
+    { value: 'priceC', label: 'Price C' },
+    { value: 'priceD', label: 'Price D' }
+  ];
+  
+  const incoTermsOptions = [
+    { value: 'FOB', label: 'FOB - Free On Board' },
+    { value: 'CIF', label: 'CIF - Cost, Insurance and Freight' },
+    { value: 'EXW', label: 'EXW - Ex Works' },
+    { value: 'DDP', label: 'DDP - Delivered Duty Paid' },
+    { value: 'DAP', label: 'DAP - Delivered At Place' }
+  ];
+  
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalContent, setModalContent] = useState<React.ReactNode>(null);
+
+  // Function to fetch countries
+  const fetchCountries = useCallback(async () => {
+    if (!user || !user.token) return;
+    
+    try {
+      // For now, we'll use a static list of countries
+      // In a real implementation, you would fetch this from an API
+      const countriesList = [
+        { value: 'India', label: 'India' },
+        { value: 'USA', label: 'USA' },
+        { value: 'Spain', label: 'Spain' },
+        { value: 'Germany', label: 'Germany' },
+        { value: 'France', label: 'France' },
+        { value: 'Italy', label: 'Italy' },
+        { value: 'UK', label: 'United Kingdom' },
+        { value: 'Canada', label: 'Canada' },
+        { value: 'Australia', label: 'Australia' },
+        { value: 'Japan', label: 'Japan' }
+      ];
+      setCountries(countriesList);
+    } catch (error) {
+      console.error('Error fetching countries:', error);
+    }
+  }, [user]);
+
+  // Function to fetch suppliers
+  const fetchSuppliers = useCallback(async () => {
+    if (!user || !user.token) return;
+    
+    setLoadingSuppliers(true);
+    setSupplierError(null);
+    try {
+      const config = {
+        method: 'get',
+        maxBodyLength: Infinity,
+        url: 'http://localhost:3000/api/suppliers',
+        headers: { 
+          'Authorization': `Bearer ${user.token}`
+        }
+      };
+
+      const response = await axios.request(config);
+      
+      if (response.data && Array.isArray(response.data)) {
+        const suppliersList = response.data.map((supplier: any) => ({
+          value: supplier._id || supplier.id,
+          label: supplier.name || 'Unknown Supplier'
+        }));
+        setSuppliers(suppliersList);
+        
+        // Log the number of suppliers found for debugging
+        console.log(`Found ${suppliersList.length} suppliers`);
+      } else {
+        setSuppliers([]);
+        setSupplierError('No suppliers data found');
+        console.log('No suppliers data found in response');
+      }
+    } catch (error) {
+      console.error('Error fetching suppliers:', error);
+      setSuppliers([]);
+      setSupplierError('Failed to load suppliers');
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  }, [user]);
+
+  // Function to fetch cities for a selected country
+  const fetchCities = useCallback(async (country: string) => {
+    if (!user || !user.token || !country) {
+      setCities([]);
+      return;
+    }
+    
+    setLoadingCities(true);
+    try {
+      const config = {
+        method: 'get',
+        maxBodyLength: Infinity,
+        url: `http://localhost:3000/api/material-center/countries/${country}/cities`,
+        headers: { 
+          'Authorization': `Bearer ${user.token}`
+        }
+      };
+
+      const response = await axios.request(config);
+      
+      if (response.data && response.data.cities) {
+        const citiesList = response.data.cities.map((city: string) => ({
+          value: city,
+          label: city
+        }));
+        setCities(citiesList);
+      } else {
+        setCities([]);
+      }
+    } catch (error) {
+      console.error('Error fetching cities:', error);
+      setCities([]);
+    } finally {
+      setLoadingCities(false);
+    }
+  }, [user]);
+
+  // Function to fetch material centers
+  const fetchMaterialCenters = useCallback(async () => {
+    if (!user || !user.token) return;
+    
+    setLoadingMaterialCenters(true);
+    setMaterialCenterError(null);
+    try {
+      const config = {
+        method: 'get',
+        maxBodyLength: Infinity,
+        url: 'http://localhost:3000/api/material-center',
+        headers: { 
+          'Authorization': `Bearer ${user.token}`
+        }
+      };
+
+      const response = await axios.request(config);
+      
+      if (response.data && response.data.materialCenters && Array.isArray(response.data.materialCenters)) {
+        const materialCentersList = response.data.materialCenters.map((center: any) => ({
+          value: center._id || center.id,
+          label: `${center.city} - ${center.warehouseSize === 'LARGE' ? 'Large' : 'Small'} Material Center`,
+          country: center.country,
+          city: center.city,
+          address: center.address,
+          warehouseSize: center.warehouseSize
+        }));
+        setMaterialCenters(materialCentersList);
+        
+        // Log the number of material centers found for debugging
+        console.log(`Found ${materialCentersList.length} material centers`);
+      } else if (response.data && Array.isArray(response.data)) {
+        // Handle case where response.data is directly an array
+        const materialCentersList = response.data.map((center: any) => ({
+          value: center._id || center.id,
+          label: `${center.city} - ${center.warehouseSize === 'LARGE' ? 'Large' : 'Small'} Material Center`,
+          country: center.country,
+          city: center.city,
+          address: center.address,
+          warehouseSize: center.warehouseSize
+        }));
+        setMaterialCenters(materialCentersList);
+        
+        console.log(`Found ${materialCentersList.length} material centers`);
+      } else {
+        setMaterialCenters([]);
+        setMaterialCenterError('No material centers data found');
+        console.log('No material centers data found in response');
+      }
+    } catch (error) {
+      console.error('Error fetching material centers:', error);
+      setMaterialCenters([]);
+      setMaterialCenterError('Failed to load material centers');
+    } finally {
+      setLoadingMaterialCenters(false);
+    }
+  }, [user]);
+
+  // Function to get filtered material centers based on selected country and city
+  const getFilteredMaterialCenters = useCallback(() => {
+    if (!materialCenters.length) return [];
+    
+    let filtered = materialCenters;
+    
+    // Filter by country if selected
+    if (selectedCountry) {
+      filtered = filtered.filter(center => center.country === selectedCountry);
+    }
+    
+    // Filter by city if selected
+    if (selectedCity) {
+      filtered = filtered.filter(center => center.city === selectedCity);
+    }
+    
+    return filtered;
+  }, [materialCenters, selectedCountry, selectedCity]);
+
+  // Handle country selection
+  const handleCountryChange = (country: string) => {
+    setSelectedCountry(country);
+    setSelectedCity(''); // Reset city when country changes
+    setSelectedMaterialCenter(''); // Reset material center when country changes
+    if (country) {
+      fetchCities(country);
+    } else {
+      setCities([]);
+    }
+  };
+
+  // Handle city selection
+  const handleCityChange = (city: string) => {
+    setSelectedCity(city);
+    setSelectedMaterialCenter(''); // Reset material center when city changes
+  };
+
+  // Fetch countries on component mount
+  useEffect(() => {
+    fetchCountries();
+    fetchSuppliers(); // Call fetchSuppliers on component mount
+    fetchMaterialCenters(); // Call fetchMaterialCenters on component mount
+  }, [fetchCountries, fetchSuppliers, fetchMaterialCenters]);
+
+  // Clear selected material center if it's no longer in filtered options
+  useEffect(() => {
+    const filteredCenters = getFilteredMaterialCenters();
+    if (selectedMaterialCenter && !filteredCenters.find(center => center.value === selectedMaterialCenter)) {
+      setSelectedMaterialCenter('');
+    }
+  }, [selectedMaterialCenter, getFilteredMaterialCenters]);
 
   // Function to fetch inventory data based on type - moved before useEffect
   const fetchInventoryData = useCallback(async (type: 'both' | 'company' | 'supplier') => {
@@ -554,20 +869,75 @@ export default function CreateOfferListPage() {
           
           {/* First row of dropdowns */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <Dropdown label="Select Currency" />
-            <Dropdown label="Select Supplier to (exclude)" />
+            <Dropdown 
+              label="Select Currency" 
+              options={currencyOptions}
+              value={selectedCurrency}
+              onChange={setSelectedCurrency}
+            />
+            <div className="relative">
+              <Dropdown 
+                label={loadingSuppliers ? "Loading suppliers..." : supplierError ? supplierError : suppliers.length === 0 ? "No suppliers available" : "Select Supplier to (exclude)"} 
+                options={suppliers}
+                value={selectedSupplier}
+                onChange={setSelectedSupplier}
+                disabled={loadingSuppliers || suppliers.length === 0 || !!supplierError}
+              />
+              {supplierError && (
+                <button 
+                  onClick={fetchSuppliers}
+                  className="absolute right-0 top-0 text-xs text-teal-600 hover:text-teal-800 underline mt-1"
+                  disabled={loadingSuppliers}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
           </div>
           
           {/* Second row of dropdowns */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <Dropdown label="Country" />
-            <Dropdown label="City" />
+            <Dropdown 
+              label="Country" 
+              options={countries}
+              value={selectedCountry}
+              onChange={handleCountryChange}
+            />
+            <Dropdown 
+              label={loadingCities ? "Loading cities..." : "City"} 
+              options={cities}
+              value={selectedCity}
+              onChange={handleCityChange}
+              disabled={!selectedCountry || loadingCities}
+            />
           </div>
           
           {/* Third row of dropdowns */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <Dropdown label="Large Material Center" />
-            <Dropdown label="Select Price" />
+            <div className="relative">
+              <Dropdown 
+                label={loadingMaterialCenters ? "Loading material centers..." : materialCenterError ? materialCenterError : getFilteredMaterialCenters().length === 0 ? "No material centers available" : "Large Material Center"} 
+                options={getFilteredMaterialCenters()}
+                value={selectedMaterialCenter}
+                onChange={setSelectedMaterialCenter}
+                disabled={loadingMaterialCenters || getFilteredMaterialCenters().length === 0 || !!materialCenterError}
+              />
+              {materialCenterError && (
+                <button 
+                  onClick={fetchMaterialCenters}
+                  className="absolute right-0 top-0 text-xs text-teal-600 hover:text-teal-800 underline mt-1"
+                  disabled={loadingMaterialCenters}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+            <Dropdown 
+              label="Select Price" 
+              options={priceOptions}
+              value={selectedPrice}
+              onChange={setSelectedPrice}
+            />
           </div>
           
           {/* Radio buttons */}
@@ -627,7 +997,13 @@ export default function CreateOfferListPage() {
           {/* Final row */}
           <div className="flex flex-wrap items-center justify-between mb-6">
             <div className="relative w-full md:w-auto mb-4 md:mb-0">
-              <Dropdown label="Select Inco Terms" className="w-full md:w-60" />
+              <Dropdown 
+                label="Select Inco Terms" 
+                className="w-full md:w-60"
+                options={incoTermsOptions}
+                value={selectedIncoTerms}
+                onChange={setSelectedIncoTerms}
+              />
             </div>
             
             <div className="flex items-center gap-2">

@@ -15,7 +15,7 @@ import FilterSortButton from './FilterButton';
 
 // Types
 export interface Product {
-  id: string;
+  _id: string;
   itemDetails: {
     name: string;
     eanCode: string;
@@ -491,7 +491,7 @@ const InventoryDashboard: React.FC = () => {
               value={selectedMaterialCenter} 
               onChange={setSelectedMaterialCenter} 
               options={filteredMaterialCenters.map(center => ({
-                value: center.id || center.id,
+                value: center._id || center.id,
                 label: `${center.city} - ${center.address}`
               }))}
             />
@@ -504,7 +504,7 @@ const InventoryDashboard: React.FC = () => {
           ) : (
             <ProductsTable 
               products={filteredProducts.map(product => ({
-                id: product.id,
+                id: product._id,
                 itemDetails: product.itemDetails.name,
                 eanCode: product.itemDetails.eanCode,
                 itemCode: product.itemDetails.itemCode,

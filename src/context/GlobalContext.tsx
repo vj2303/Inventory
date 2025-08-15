@@ -12,11 +12,23 @@ interface Supplier {
 }
 
 interface MaterialCenter {
-  _id: string;
-  id?: string;
+  _id?: string;
+  id: string;
   address: string;
   city: string;
   country: string;
+  warehouseSize?: string;
+  currency?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  _count?: {
+    products: number;
+    sales: number;
+    purchaseOrders: number;
+    sourceTransfers: number;
+    destinationTransfers: number;
+  };
 }
 
 interface GlobalContextType {
@@ -70,7 +82,7 @@ export function GlobalProvider({ children }: GlobalProviderProps) {
         ]);
         
         setSuppliers(suppliersResponse.data);
-        setMaterialCenters(materialCentersResponse.data);
+        setMaterialCenters(materialCentersResponse.data.materialCenters || []);
         setLoading(false);
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -87,7 +99,7 @@ export function GlobalProvider({ children }: GlobalProviderProps) {
     suppliers.find(supplier => supplier._id === id || supplier.id === id);
   
   const getMaterialCenterById = (id: string): MaterialCenter | undefined => 
-    materialCenters.find(center => center._id === id || center.id === id);
+    materialCenters.find(center => center.id === id || center._id === id);
   
   // Get supplier name by ID
   const getSupplierName = (id: string): string => {

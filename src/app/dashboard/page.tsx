@@ -4,8 +4,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import Loader from '@/components/UI/Loader';
 import { useAuth } from '@/context/AuthContext';
-import SearchBar from '@/components/UI/Searchbar';
-import SortDropdown from '@/components/UI/SortDropDown';
+import SearchBar from '@/components/UI/SearchBar';
+import SortDropdown from '@/components/UI/SortDropdown';
 
 export interface Product {
   _id: string;
@@ -35,6 +35,12 @@ const ProductDashboard = () => {
   const [inventoryType, setInventoryType] = useState<"company" | "supplier">("company");
   const [page, setPage] = useState<number>(1);
   const [limit] = useState<number>(10);
+  
+  // Suppliers list states
+  const [showSuppliersList, setShowSuppliersList] = useState<boolean>(false);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [suppliersLoading, setSuppliersLoading] = useState<boolean>(false);
+  const [suppliersError, setSuppliersError] = useState<string | null>(null);
   
   // Sort options for the dropdown
   const sortOptions = [
@@ -93,6 +99,31 @@ const ProductDashboard = () => {
     }
   }, [page, limit, search, sort, inventoryType, user?.token]);
 
+  // Fetch suppliers list
+  const fetchSuppliers = useCallback(async () => {
+    if (!user?.token) return;
+    
+    setSuppliersLoading(true);
+    setSuppliersError(null);
+    try {
+      const response = await axios({
+        method: 'get',
+        url: `${process.env.NEXT_PUBLIC_SERVER_HOSTNAME || 'http://localhost:3000'}/api/suppliers`,
+        headers: {
+          'Authorization': `Bearer ${user.token}`
+        }
+      });
+      
+      setSuppliers(response.data || []);
+    } catch (err: unknown) {
+      console.error("Error fetching suppliers:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch suppliers";
+      setSuppliersError(errorMessage);
+    } finally {
+      setSuppliersLoading(false);
+    }
+  }, [user?.token]);
+
   // Initial data fetch
   useEffect(() => {
     if (user?.token) {
@@ -124,6 +155,25 @@ const ProductDashboard = () => {
   // Toggle inventory type
   const toggleInventoryType = (type: "company" | "supplier") => {
     setInventoryType(type);
+    // Automatically show suppliers list when supplier inventory is selected
+    if (type === "supplier") {
+      setShowSuppliersList(true);
+      // Fetch suppliers if not already loaded
+      if (suppliers.length === 0) {
+        fetchSuppliers();
+      }
+    } else {
+      // Hide suppliers list when company inventory is selected
+      setShowSuppliersList(false);
+    }
+  };
+
+  // Toggle suppliers list
+  const toggleSuppliersList = () => {
+    setShowSuppliersList(!showSuppliersList);
+    if (!showSuppliersList && suppliers.length === 0) {
+      fetchSuppliers();
+    }
   };
 
   // Handle sort selection
@@ -202,6 +252,81 @@ const ProductDashboard = () => {
           <span>Supplier Inventory</span>
         </div>
       </div>
+      
+      {/* Suppliers List Display */}
+      {showSuppliersList && (
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Suppliers List</h2>
+          {suppliersLoading ? (
+            <div className="text-center py-6">
+              <Loader />
+            </div>
+          ) : suppliersError ? (
+            <div className="p-4 bg-red-50 text-red-600 rounded-md">
+              {suppliersError}
+            </div>
+          ) : suppliers.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead className="bg-[#B2D9D84D] text-left">
+                  <tr className="text-sm font-semibold text-gray-800">
+                    <th className="px-4 py-3">Supplier Image</th>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Profile</th>
+                    <th className="px-4 py-3">Manager</th>
+                    <th className="px-4 py-3">Phone</th>
+                    <th className="px-4 py-3">Country</th>
+                    <th className="px-4 py-3">City</th>
+                    <th className="px-4 py-3">Address</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {suppliers.map((supplier) => (
+                    <tr key={supplier._id} className="border-b border-gray-200 hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        {supplier.supplierImage?.url ? (
+                          <img 
+                            src={supplier.supplierImage.url} 
+                            alt={supplier.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0" />
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-800">
+                        {supplier.name || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {supplier.profile || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {supplier.managerName || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {supplier.phoneNumber || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {supplier.country || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {supplier.city || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {supplier.address || 'N/A'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-6 text-gray-500">
+              No suppliers available
+            </div>
+          )}
+        </div>
+      )}
       
       {loading ? (
         <div className="flex justify-center items-center mt-[300px]">

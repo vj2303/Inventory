@@ -41,15 +41,23 @@ interface Product {
 }
 
 interface MaterialCenter {
-  _id: string;
+  _id?: string;
+  id: string;
   city: string;
   country: string;
   address: string;
   warehouseSize: string;
   isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  __v: number;
+  createdAt?: string;
+  updatedAt?: string;
+  currency?: string;
+  _count?: {
+    products: number;
+    sales: number;
+    purchaseOrders: number;
+    sourceTransfers: number;
+    destinationTransfers: number;
+  };
 }
 
 export default function ProductSelection() {
@@ -123,7 +131,10 @@ export default function ProductSelection() {
           'Authorization': `Bearer ${user?.token}`
         }
       });
-      setMaterialCenters(response.data.materialCenters);
+      console.log('Material centers API response:', response.data);
+      const centers = response.data.materialCenters || response.data || [];
+      console.log('Processed material centers:', centers);
+      setMaterialCenters(centers);
     } catch (error) {
       console.error('Error fetching material centers:', error);
     } finally {
@@ -134,11 +145,14 @@ export default function ProductSelection() {
   const fetchProducts = async (materialCenterId: string) => {
     setLoading(true);
     try {
+      console.log('Fetching products for material center ID:', materialCenterId);
       const response = await axios.get(`http://localhost:3000/api/stock-transfer/products?materialCenterId=${materialCenterId}`, {
         headers: {
           'Authorization': `Bearer ${user?.token}`
         }
       });
+      
+      console.log('Products API response:', response.data);
       
       // Add availability status based on quantity
       const productsWithAvailability = response.data.products.map((product: Product) => {
@@ -156,6 +170,9 @@ export default function ProductSelection() {
       setTotalPages(Math.ceil(response.data.count / 10)); // Assuming 10 items per page
     } catch (error) {
       console.error('Error fetching products:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Axios error details:', error.response?.data);
+      }
     } finally {
       setLoading(false);
     }
@@ -284,7 +301,7 @@ export default function ProductSelection() {
             >
               <option value="">Select Warehouse</option>
               {materialCenters.map((center) => (
-                <option key={center._id} value={center._id}>
+                <option key={center._id || center.id} value={center._id || center.id}>
                   {center.city} - {center.address}
                 </option>
               ))}
@@ -312,7 +329,7 @@ export default function ProductSelection() {
             >
               <option value="">Select Warehouse</option>
               {destinationOptions.map((center) => (
-                <option key={center._id} value={center._id}>
+                <option key={center._id || center.id} value={center._id || center.id}>
                   {center.city} - {center.address}
                 </option>
               ))}
